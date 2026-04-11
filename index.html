@@ -879,6 +879,30 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modalResetPass" style="z-index:9999;">
+  <div class="modal-box">
+    <div class="modal-title" style="color:#fff;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM6 20v-1a6 6 0 0 1 12 0v1"/></svg>
+      Nueva contraseña
+    </div>
+    <p style="font-size:.82rem;color:#c0d8da;margin-bottom:16px;line-height:1.5;">
+      Crea tu nueva contraseña de administrador.
+    </p>
+    <div class="modal-field">
+      <label>Nueva contraseña</label>
+      <input type="password" id="resetPass1" placeholder="Mínimo 6 caracteres" />
+    </div>
+    <div class="modal-field" style="margin-top:10px;">
+      <label>Confirmar nueva contraseña</label>
+      <input type="password" id="resetPass2" placeholder="Repite la contraseña" />
+    </div>
+    <div class="modal-error" id="resetPassError">Las contraseñas no coinciden o son muy cortas.</div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn-modal-primary" id="btnResetPassSave">Guardar contraseña</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1948,7 +1972,7 @@
 
   // ── RECUPERAR CONTRASEÑA vía Supabase Auth ────────────
   document.getElementById('btnForgotPass').addEventListener('click', () => {
-    document.getElementById('recoverEmail').value = ADMIN_EMAIL;
+    document.getElementById('recoverEmail').value = '';
     document.getElementById('recoverEmailError').classList.remove('visible');
     document.getElementById('recoverSuccess').style.display = 'none';
     showAdminStep(2);
@@ -2254,6 +2278,64 @@
   }
 
   init();
+
+  // ── DETECTAR TOKEN DE RESET DE CONTRASEÑA ────────────
+  // Supabase redirige con #access_token=...&type=recovery en la URL
+  (function checkPasswordReset() {
+    const hash = window.location.hash;
+    if (!hash.includes('type=recovery') && !hash.includes('type=email_change')) return;
+
+    const params = new URLSearchParams(hash.replace('#', ''));
+    const accessToken = params.get('access_token');
+    if (!accessToken) return;
+
+    // Limpiar la URL sin recargar
+    history.replaceState(null, '', window.location.pathname);
+
+    // Mostrar modal de nueva contraseña
+    document.getElementById('modalResetPass').classList.add('open');
+
+    document.getElementById('btnResetPassSave').addEventListener('click', async () => {
+      const p1 = document.getElementById('resetPass1').value;
+      const p2 = document.getElementById('resetPass2').value;
+      const errEl = document.getElementById('resetPassError');
+      const btn = document.getElementById('btnResetPassSave');
+
+      if (p1.length < 6 || p1 !== p2) {
+        errEl.classList.add('visible'); return;
+      }
+
+      errEl.classList.remove('visible');
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+
+      try {
+        const res = await fetch(`${SB_URL}/auth/v1/user`, {
+          method: 'PUT',
+          headers: {
+            'apikey': SB_KEY,
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ password: p1 })
+        });
+
+        if (res.ok) {
+          document.getElementById('modalResetPass').classList.remove('open');
+          toast('✓ Contraseña actualizada. Ya puedes iniciar sesión.');
+        } else {
+          errEl.textContent = 'Error al guardar. Intenta de nuevo.';
+          errEl.classList.add('visible');
+        }
+      } catch(e) {
+        errEl.textContent = 'Error de conexión. Intenta de nuevo.';
+        errEl.classList.add('visible');
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Guardar contraseña';
+    });
+  })();
 
   // Auto-refresh cada 60 segundos para sincronizar con Supabase
   setInterval(async () => {

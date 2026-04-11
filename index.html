@@ -466,6 +466,24 @@
   }
   .btn-unblock:hover { background: rgba(192,84,74,.3); color: #fff; }
 
+  /* ── BLOCK TOGGLE BUTTONS ── */
+  .block-toggle-btn {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(79,168,168,.2);
+    border-radius: 10px; color: #c0d8da; cursor: pointer; padding: 10px 14px;
+    font-family: 'DM Sans', sans-serif; font-size: .82rem; width: 100%;
+    text-align: left; transition: all .18s;
+  }
+  .block-toggle-btn:hover { border-color: rgba(79,168,168,.4); color: #fff; }
+  .block-toggle-btn.active {
+    background: rgba(79,168,168,.15); border-color: var(--teal);
+    color: #fff;
+  }
+  .block-toggle-btn.active .block-toggle-icon { color: var(--teal); }
+  .block-toggle-btn#blockAll.active { background: rgba(192,84,74,.15); border-color: #e08070; }
+  .block-toggle-btn#blockAll.active .block-toggle-icon { color: #e08070; }
+  .block-toggle-icon { font-size: 1rem; line-height: 1; flex-shrink: 0; }
+
   /* ── FOOTER ── */
   .footer {
     position: relative; z-index: 1;
@@ -674,29 +692,22 @@
 
       <div class="modal-field" style="margin-bottom:12px;">
         <label>¿Qué bloquear?</label>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px;" id="blockSlotsContainer">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.85rem;color:#fff;font-weight:400;">
-            <input type="checkbox" id="blockAll" style="accent-color:var(--teal);width:16px;height:16px;" />
-            Día completo
-          </label>
-          <div id="blockSlotOptions" style="display:flex;flex-direction:column;gap:6px;padding-left:4px;">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.82rem;color:#c0d8da;font-weight:400;">
-              <input type="checkbox" class="block-slot-cb" data-slot="s1" style="accent-color:var(--teal);width:15px;height:15px;" />
-              8:00 AM – 10:00 AM
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.82rem;color:#c0d8da;font-weight:400;">
-              <input type="checkbox" class="block-slot-cb" data-slot="s2" style="accent-color:var(--teal);width:15px;height:15px;" />
-              10:00 AM – 12:00 M
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.82rem;color:#c0d8da;font-weight:400;">
-              <input type="checkbox" class="block-slot-cb" data-slot="s3" style="accent-color:var(--teal);width:15px;height:15px;" />
-              1:00 PM – 3:00 PM
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.82rem;color:#c0d8da;font-weight:400;">
-              <input type="checkbox" class="block-slot-cb" data-slot="s4" style="accent-color:var(--teal);width:15px;height:15px;" />
-              3:00 PM – 5:00 PM
-            </label>
-          </div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;" id="blockSlotsContainer">
+          <button type="button" class="block-toggle-btn" id="blockAll" data-slot="all" style="justify-content:flex-start;font-weight:600;">
+            <span class="block-toggle-icon">○</span> Día completo
+          </button>
+          <button type="button" class="block-toggle-btn block-slot-cb" data-slot="s1">
+            <span class="block-toggle-icon">○</span> 8:00 AM – 10:00 AM
+          </button>
+          <button type="button" class="block-toggle-btn block-slot-cb" data-slot="s2">
+            <span class="block-toggle-icon">○</span> 10:00 AM – 12:00 M
+          </button>
+          <button type="button" class="block-toggle-btn block-slot-cb" data-slot="s3">
+            <span class="block-toggle-icon">○</span> 1:00 PM – 3:00 PM
+          </button>
+          <button type="button" class="block-toggle-btn block-slot-cb" data-slot="s4">
+            <span class="block-toggle-icon">○</span> 3:00 PM – 5:00 PM
+          </button>
         </div>
       </div>
 
@@ -1474,18 +1485,42 @@
     document.getElementById('blockReasonInput').value = '';
     document.getElementById('blockError').textContent = '';
     document.getElementById('blockError').classList.remove('visible');
-    document.getElementById('blockAll').checked = false;
-    document.querySelectorAll('.block-slot-cb').forEach(cb => { cb.checked = false; cb.disabled = false; });
+    // Reset all toggle buttons
+    document.querySelectorAll('.block-toggle-btn').forEach(btn => {
+      btn.classList.remove('active');
+      btn.querySelector('.block-toggle-icon').textContent = '○';
+    });
     document.getElementById('modalBlockedDays').classList.add('open');
   }
   function closeBlockedDaysModal() {
     document.getElementById('modalBlockedDays').classList.remove('open');
   }
 
-  document.getElementById('blockAll').addEventListener('change', function() {
-    document.querySelectorAll('.block-slot-cb').forEach(cb => {
-      cb.checked = this.checked;
-      cb.disabled = this.checked;
+  // Toggle button click handlers
+  document.getElementById('blockAll').addEventListener('click', function() {
+    const isActive = this.classList.toggle('active');
+    this.querySelector('.block-toggle-icon').textContent = isActive ? '✓' : '○';
+    // Toggle all slot buttons
+    document.querySelectorAll('.block-slot-cb').forEach(btn => {
+      if (isActive) {
+        btn.classList.add('active');
+        btn.querySelector('.block-toggle-icon').textContent = '✓';
+      } else {
+        btn.classList.remove('active');
+        btn.querySelector('.block-toggle-icon').textContent = '○';
+      }
+    });
+  });
+
+  document.querySelectorAll('.block-slot-cb').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const isActive = this.classList.toggle('active');
+      this.querySelector('.block-toggle-icon').textContent = isActive ? '✓' : '○';
+      // If not all active, deactivate "Día completo"
+      const allActive = [...document.querySelectorAll('.block-slot-cb')].every(b => b.classList.contains('active'));
+      const allBtn = document.getElementById('blockAll');
+      allBtn.classList.toggle('active', allActive);
+      allBtn.querySelector('.block-toggle-icon').textContent = allActive ? '✓' : '○';
     });
   });
 
@@ -1532,8 +1567,8 @@
     const dateVal = document.getElementById('blockDateInput').value;
     const reason  = document.getElementById('blockReasonInput').value.trim();
     const errEl   = document.getElementById('blockError');
-    const allDay  = document.getElementById('blockAll').checked;
-    const selectedCbs = [...document.querySelectorAll('.block-slot-cb:checked')].map(cb => cb.dataset.slot);
+    const allDay  = document.getElementById('blockAll').classList.contains('active');
+    const selectedCbs = [...document.querySelectorAll('.block-slot-cb.active')].map(btn => btn.dataset.slot);
 
     if (!dateVal) { errEl.textContent = 'Selecciona una fecha.'; errEl.classList.add('visible'); return; }
     if (!allDay && selectedCbs.length === 0) {
@@ -1560,8 +1595,10 @@
     renderCalendar();
     document.getElementById('blockDateInput').value = '';
     document.getElementById('blockReasonInput').value = '';
-    document.getElementById('blockAll').checked = false;
-    document.querySelectorAll('.block-slot-cb').forEach(cb => { cb.checked = false; cb.disabled = false; });
+    document.querySelectorAll('.block-toggle-btn').forEach(btn => {
+      btn.classList.remove('active');
+      btn.querySelector('.block-toggle-icon').textContent = '○';
+    });
     toast(`✓ Bloqueo guardado para el ${dateVal}.`);
   }
 
@@ -1845,7 +1882,7 @@
   const ADMIN_EMAIL_KEY = 'csAdminEmail';
   const ADMIN_PASS_KEY  = 'csAdminPass';
   // Default credentials — stored on first run if not already set
-  const DEFAULT_ADMIN_EMAIL = 'administrador3@admonph.com';  // ← cambia este correo
+  const DEFAULT_ADMIN_EMAIL = 'admin@phcolombia.com';  // ← cambia este correo
   const DEFAULT_ADMIN_PASS  = 'colorselva2026';         // ← cambia esta contraseña
 
   function getAdminEmail() { return localStorage.getItem(ADMIN_EMAIL_KEY) || DEFAULT_ADMIN_EMAIL; }

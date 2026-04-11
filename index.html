@@ -1878,15 +1878,12 @@
   });
 
   // ── ADMIN MODAL ───────────────────────────────────────
-  // Credentials stored in localStorage (changeable via recovery flow)
-  const ADMIN_EMAIL_KEY = 'csAdminEmail';
-  const ADMIN_PASS_KEY  = 'csAdminPass';
-  // Default credentials — stored on first run if not already set
-  const DEFAULT_ADMIN_EMAIL = 'administrador3@admonph.com';  // ← cambia este correo
-  const DEFAULT_ADMIN_PASS  = 'colorselva2026';         // ← cambia esta contraseña
+  const ADMIN_EMAIL = 'administrador3@admonph.com';
+  const ADMIN_PASS  = 'colorselva2026';
 
-  function getAdminEmail() { return localStorage.getItem(ADMIN_EMAIL_KEY) || DEFAULT_ADMIN_EMAIL; }
-  function getAdminPass()  { return localStorage.getItem(ADMIN_PASS_KEY)  || DEFAULT_ADMIN_PASS; }
+  function getAdminEmail() { return ADMIN_EMAIL; }
+  // Password can be updated via recovery flow and stored in localStorage
+  function getAdminPass()  { return localStorage.getItem('csAdminPass') || ADMIN_PASS; }
 
   function showAdminStep(n) {
     [1,2,3,4].forEach(i => {
@@ -1976,7 +1973,7 @@
       errEl.classList.add('visible');
       return;
     }
-    localStorage.setItem(ADMIN_PASS_KEY, p1);
+    localStorage.setItem('csAdminPass', p1);
     closeAdminModal();
     toast('✓ Contraseña actualizada. Ya puedes iniciar sesión.');
   });

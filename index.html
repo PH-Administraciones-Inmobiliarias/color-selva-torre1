@@ -654,34 +654,65 @@
 
 <!-- ── MODAL: DÍAS BLOQUEADOS ── -->
 <div class="modal-overlay" id="modalBlockedDays">
-  <div class="modal-box" style="width:400px; max-height:90vh; overflow-y:auto;">
+  <div class="modal-box" style="width:420px; max-height:90vh; overflow-y:auto;">
     <div class="modal-title" style="color:#fff;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg>
       Gestionar días bloqueados
     </div>
     <p style="font-size:.8rem;color:#c0d8da;margin-bottom:16px;line-height:1.5;">
-      Bloquea días específicos para que los residentes no puedan agendar. Útil por mantenimientos, festivos adicionales o restricciones temporales.
+      Bloquea un día completo o franjas específicas para que los residentes no puedan agendar.
     </p>
 
-    <!-- Add new blocked day -->
+    <!-- Add new blocked day/slot -->
     <div style="background:rgba(255,255,255,.04);border:1px solid rgba(79,168,168,.18);border-radius:12px;padding:16px;margin-bottom:16px;">
-      <div style="font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:#c0d8da;margin-bottom:12px;font-weight:600;">Agregar día bloqueado</div>
-      <div class="modal-field" style="margin-bottom:10px;">
+      <div style="font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:#c0d8da;margin-bottom:12px;font-weight:600;">Agregar bloqueo</div>
+
+      <div class="modal-field" style="margin-bottom:12px;">
         <label>Fecha</label>
         <input type="date" id="blockDateInput" style="color-scheme:dark;" />
       </div>
+
+      <div class="modal-field" style="margin-bottom:12px;">
+        <label>¿Qué bloquear?</label>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px;" id="blockSlotsContainer">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.85rem;color:#fff;font-weight:400;">
+            <input type="checkbox" id="blockAll" style="accent-color:var(--teal);width:16px;height:16px;" />
+            Día completo
+          </label>
+          <div id="blockSlotOptions" style="display:flex;flex-direction:column;gap:6px;padding-left:4px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.82rem;color:#c0d8da;font-weight:400;">
+              <input type="checkbox" class="block-slot-cb" data-slot="s1" style="accent-color:var(--teal);width:15px;height:15px;" />
+              8:00 AM – 10:00 AM
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.82rem;color:#c0d8da;font-weight:400;">
+              <input type="checkbox" class="block-slot-cb" data-slot="s2" style="accent-color:var(--teal);width:15px;height:15px;" />
+              10:00 AM – 12:00 M
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.82rem;color:#c0d8da;font-weight:400;">
+              <input type="checkbox" class="block-slot-cb" data-slot="s3" style="accent-color:var(--teal);width:15px;height:15px;" />
+              1:00 PM – 3:00 PM
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.82rem;color:#c0d8da;font-weight:400;">
+              <input type="checkbox" class="block-slot-cb" data-slot="s4" style="accent-color:var(--teal);width:15px;height:15px;" />
+              3:00 PM – 5:00 PM
+            </label>
+          </div>
+        </div>
+      </div>
+
       <div class="modal-field" style="margin-bottom:12px;">
         <label>Motivo (opcional)</label>
         <input type="text" id="blockReasonInput" placeholder="Ej. Mantenimiento de ascensores" maxlength="80" />
       </div>
+
       <button class="btn-modal-primary" id="btnAddBlockedDay" style="width:100%;">
-        + Bloquear este día
+        + Aplicar bloqueo
       </button>
       <div class="modal-error" id="blockError" style="margin-top:8px;"></div>
     </div>
 
     <!-- List of blocked days -->
-    <div style="font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:#c0d8da;margin-bottom:10px;font-weight:600;">Días bloqueados activos</div>
+    <div style="font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:#c0d8da;margin-bottom:10px;font-weight:600;">Bloqueos activos</div>
     <div id="blockedDaysList"></div>
 
     <div class="modal-actions" style="margin-top:16px;">
@@ -776,7 +807,7 @@
     <div id="adminStep1">
       <div class="modal-field">
         <label>Correo autorizado</label>
-        <input type="email" id="adminEmail" placeholder="ejemplo@ejemplo.com" autocomplete="username" />
+        <input type="email" id="adminEmail" placeholder="admin@phcolombia.com" autocomplete="username" />
       </div>
       <div class="modal-field" style="margin-top:10px;">
         <label>Contraseña</label>
@@ -1005,34 +1036,65 @@
   function saveData() { /* datos manejados en Supabase */ }
 
   // ── ADMIN BLOCKED DAYS (Supabase) ─────────────────────
+  // Structure: { 'YYYY-MM-DD': { slots: Set(['s1','s2',...]) | 'all', motivo: '' } }
   let blockedDays = {};
 
   async function loadBlockedDaysFromSupabase() {
     const rows = await sbFetch('dias_bloqueados?select=*');
     blockedDays = {};
-    if (rows) rows.forEach(r => { blockedDays[r.fecha] = r.motivo || ''; });
+    if (rows) {
+      rows.forEach(r => {
+        if (!blockedDays[r.fecha]) blockedDays[r.fecha] = { slots: new Set(), motivo: r.motivo || '' };
+        if (!r.slot_id || r.slot_id === 'all') {
+          blockedDays[r.fecha].slots = 'all';
+        } else {
+          if (blockedDays[r.fecha].slots !== 'all') blockedDays[r.fecha].slots.add(r.slot_id);
+        }
+        if (r.motivo) blockedDays[r.fecha].motivo = r.motivo;
+      });
+    }
   }
 
-  async function saveBlockedDayToSupabase(fecha, motivo) {
+  async function saveBlockedEntryToSupabase(fecha, slot_id, motivo) {
+    // Use fecha+slot_id as unique key via upsert
     await sbFetch('dias_bloqueados', {
       method: 'POST',
-      body: JSON.stringify({ fecha, motivo: motivo || '' }),
+      body: JSON.stringify({ fecha, slot_id: slot_id || 'all', motivo: motivo || '' }),
       headers: { 'Prefer': 'resolution=merge-duplicates,return=representation' }
     });
   }
 
-  async function deleteBlockedDayFromSupabase(fecha) {
-    await sbFetch(`dias_bloqueados?fecha=eq.${fecha}`, { method: 'DELETE' });
+  async function deleteBlockedDayFromSupabase(fecha, slot_id = null) {
+    if (slot_id) {
+      await sbFetch(`dias_bloqueados?fecha=eq.${fecha}&slot_id=eq.${slot_id}`, { method: 'DELETE' });
+    } else {
+      await sbFetch(`dias_bloqueados?fecha=eq.${fecha}`, { method: 'DELETE' });
+    }
   }
 
   function saveBlockedDays() { /* manejado en Supabase */ }
 
   function isDayBlocked(date) {
-    return isSunday(date) || isHoliday(date) || (toKey(date) in blockedDays);
+    if (isSunday(date) || isHoliday(date)) return true;
+    const key = toKey(date);
+    return key in blockedDays && blockedDays[key].slots === 'all';
+  }
+
+  function isSlotBlocked(date, slotId) {
+    const key = toKey(date);
+    if (!(key in blockedDays)) return false;
+    const entry = blockedDays[key];
+    return entry.slots === 'all' || (entry.slots instanceof Set && entry.slots.has(slotId));
   }
 
   function isAdminBlocked(date) {
-    return toKey(date) in blockedDays;
+    const key = toKey(date);
+    return key in blockedDays && blockedDays[key].slots === 'all';
+  }
+
+  function isPartiallyBlocked(date) {
+    const key = toKey(date);
+    return key in blockedDays && blockedDays[key].slots !== 'all' && blockedDays[key].slots.size > 0;
   }
 
   // ── SLOTS ─────────────────────────────────────────────
@@ -1132,18 +1194,18 @@
     const grid = document.getElementById('slotsGrid');
     const res = getDateRes();
     const availableSlots = getAvailableSlots(selectedDate);
-    const blocked = isDayBlocked(selectedDate);
+    const dayBlocked = isDayBlocked(selectedDate);
     grid.innerHTML = '';
 
     ALL_SLOTS.forEach(slot => {
-      const available = availableSlots.find(s => s.id === slot.id);
-      const past      = isSlotPast(slot, selectedDate);
-      const count     = res.filter(r => r.slotId === slot.id).length;
-      const full      = count >= MAX_PER_SLOT;
-      const unavailable = !available || blocked || past;
+      const available    = availableSlots.find(s => s.id === slot.id);
+      const past         = isSlotPast(slot, selectedDate);
+      const count        = res.filter(r => r.slotId === slot.id).length;
+      const full         = count >= MAX_PER_SLOT;
+      const slotBlocked  = isSlotBlocked(selectedDate, slot.id);
+      const unavailable  = !available || dayBlocked || past || slotBlocked;
       const sel = selectedSlot === slot.id;
 
-      // If currently selected slot becomes past, deselect it
       if (past && selectedSlot === slot.id) selectedSlot = null;
 
       const btn = document.createElement('button');
@@ -1155,9 +1217,10 @@
       btn.dataset.id = slot.id;
 
       let countText = '';
-      if (past)        countText = 'Turno vencido';
-      else if (unavailable) countText = 'No disponible';
-      else if (full)   countText = 'Sin cupos';
+      if (past)           countText = 'Turno vencido';
+      else if (slotBlocked) countText = 'No disponible';
+      else if (dayBlocked)  countText = 'No disponible';
+      else if (full)        countText = 'Sin cupos';
       else countText = `${MAX_PER_SLOT - count} cupo${MAX_PER_SLOT - count !== 1 ? 's' : ''}`;
 
       btn.innerHTML = `${slot.label}<span class="slot-count">${countText}</span>`;
@@ -1405,96 +1468,101 @@
   // ── BLOCKED DAYS MODAL ────────────────────────────────
   function openBlockedDaysModal() {
     renderBlockedDaysList();
-    // Set min date to today
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('blockDateInput').min = today;
     document.getElementById('blockDateInput').value = '';
     document.getElementById('blockReasonInput').value = '';
     document.getElementById('blockError').textContent = '';
     document.getElementById('blockError').classList.remove('visible');
+    document.getElementById('blockAll').checked = false;
+    document.querySelectorAll('.block-slot-cb').forEach(cb => { cb.checked = false; cb.disabled = false; });
     document.getElementById('modalBlockedDays').classList.add('open');
   }
   function closeBlockedDaysModal() {
     document.getElementById('modalBlockedDays').classList.remove('open');
   }
 
+  document.getElementById('blockAll').addEventListener('change', function() {
+    document.querySelectorAll('.block-slot-cb').forEach(cb => {
+      cb.checked = this.checked;
+      cb.disabled = this.checked;
+    });
+  });
+
   function renderBlockedDaysList() {
     const list = document.getElementById('blockedDaysList');
     const keys = Object.keys(blockedDays).sort();
     if (keys.length === 0) {
-      list.innerHTML = `<div style="text-align:center;color:#c0d8da;font-size:.82rem;padding:16px 0;">No hay días bloqueados adicionales.</div>`;
+      list.innerHTML = `<div style="text-align:center;color:#c0d8da;font-size:.82rem;padding:16px 0;">No hay bloqueos activos.</div>`;
       return;
     }
     list.innerHTML = '';
+    const slotLabels = { s1:'8:00 AM – 10:00 AM', s2:'10:00 AM – 12:00 M', s3:'1:00 PM – 3:00 PM', s4:'3:00 PM – 5:00 PM' };
     keys.forEach(key => {
-      const reason = blockedDays[key];
-      // Format date nicely
+      const entry = blockedDays[key];
       const [y,m,d] = key.split('-').map(Number);
-      const dateObj = new Date(y, m-1, d);
-      const label = dateObj.toLocaleDateString('es-CO', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-
+      const dateLabel = new Date(y, m-1, d).toLocaleDateString('es-CO', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+      const isAll = entry.slots === 'all';
+      const slotsLabel = isAll ? 'Día completo' : [...entry.slots].map(s => slotLabels[s] || s).join(', ');
       const el = document.createElement('div');
       el.className = 'blocked-day-item';
       el.innerHTML = `
         <div class="blocked-day-info">
-          <div class="blocked-day-date">${label}</div>
-          ${reason ? `<div class="blocked-day-reason">${esc(reason)}</div>` : ''}
+          <div class="blocked-day-date">${dateLabel}</div>
+          <div class="blocked-day-reason">${slotsLabel}${entry.motivo ? ' — ' + esc(entry.motivo) : ''}</div>
         </div>
-        <button class="btn-unblock" data-key="${key}">Desbloquear</button>
+        <button class="btn-unblock" data-key="${key}">Quitar</button>
       `;
       list.appendChild(el);
     });
     list.querySelectorAll('.btn-unblock').forEach(btn => {
       btn.addEventListener('click', async () => {
-        delete blockedDays[btn.dataset.key];
-        await deleteBlockedDayFromSupabase(btn.dataset.key);
+        const key = btn.dataset.key;
+        await deleteBlockedDayFromSupabase(key);
+        delete blockedDays[key];
         renderBlockedDaysList();
         renderAll();
-        toast('✓ Día desbloqueado correctamente.');
+        renderCalendar();
+        toast('✓ Bloqueo eliminado.');
       });
     });
   }
 
   async function addBlockedDay() {
-    const dateVal   = document.getElementById('blockDateInput').value;
-    const reason    = document.getElementById('blockReasonInput').value.trim();
-    const errEl     = document.getElementById('blockError');
+    const dateVal = document.getElementById('blockDateInput').value;
+    const reason  = document.getElementById('blockReasonInput').value.trim();
+    const errEl   = document.getElementById('blockError');
+    const allDay  = document.getElementById('blockAll').checked;
+    const selectedCbs = [...document.querySelectorAll('.block-slot-cb:checked')].map(cb => cb.dataset.slot);
 
-    if (!dateVal) {
-      errEl.textContent = 'Selecciona una fecha.';
-      errEl.classList.add('visible');
-      return;
+    if (!dateVal) { errEl.textContent = 'Selecciona una fecha.'; errEl.classList.add('visible'); return; }
+    if (!allDay && selectedCbs.length === 0) {
+      errEl.textContent = 'Selecciona al menos una franja o marca "Día completo".'; errEl.classList.add('visible'); return;
     }
-
-    // Parse date without timezone shift
     const [y, m, d] = dateVal.split('-').map(Number);
     const dateObj = new Date(y, m-1, d);
-
-    if (isSunday(dateObj)) {
-      errEl.textContent = 'Los domingos ya están bloqueados automáticamente.';
-      errEl.classList.add('visible');
-      return;
-    }
-    if (isHoliday(dateObj)) {
-      errEl.textContent = 'Este día ya es festivo en Colombia y está bloqueado automáticamente.';
-      errEl.classList.add('visible');
-      return;
-    }
-    if (dateVal in blockedDays) {
-      errEl.textContent = 'Este día ya está bloqueado.';
-      errEl.classList.add('visible');
-      return;
-    }
+    if (isSunday(dateObj)) { errEl.textContent = 'Los domingos ya están bloqueados automáticamente.'; errEl.classList.add('visible'); return; }
+    if (isHoliday(dateObj)) { errEl.textContent = 'Este día ya es festivo y está bloqueado automáticamente.'; errEl.classList.add('visible'); return; }
 
     errEl.classList.remove('visible');
-    blockedDays[dateVal] = reason;
-    await saveBlockedDayToSupabase(dateVal, reason);
+    if (allDay) {
+      await saveBlockedEntryToSupabase(dateVal, 'all', reason);
+      blockedDays[dateVal] = { slots: 'all', motivo: reason };
+    } else {
+      if (!blockedDays[dateVal]) blockedDays[dateVal] = { slots: new Set(), motivo: reason };
+      for (const slotId of selectedCbs) {
+        await saveBlockedEntryToSupabase(dateVal, slotId, reason);
+        if (blockedDays[dateVal].slots !== 'all') blockedDays[dateVal].slots.add(slotId);
+      }
+    }
     renderBlockedDaysList();
     renderAll();
     renderCalendar();
     document.getElementById('blockDateInput').value = '';
     document.getElementById('blockReasonInput').value = '';
-    toast(`✓ Día bloqueado: ${dateVal}${reason ? ' — ' + reason : ''}`);
+    document.getElementById('blockAll').checked = false;
+    document.querySelectorAll('.block-slot-cb').forEach(cb => { cb.checked = false; cb.disabled = false; });
+    toast(`✓ Bloqueo guardado para el ${dateVal}.`);
   }
 
   document.getElementById('btnBlockedDays').addEventListener('click', openBlockedDaysModal);

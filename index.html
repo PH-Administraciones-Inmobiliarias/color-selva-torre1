@@ -1040,10 +1040,6 @@
     });
   }
 
-  async function deleteReservaFromSupabase(rid) {
-    await sbFetch(`reservas?id=eq.${rid}`, { method: 'DELETE' });
-  }
-
   function saveData() { /* datos manejados en Supabase */ }
 
   // ── ADMIN BLOCKED DAYS (Supabase) ─────────────────────
@@ -1067,20 +1063,19 @@
   }
 
   async function saveBlockedEntryToSupabase(fecha, slot_id, motivo) {
-    // Use fecha+slot_id as unique key via upsert
     await sbFetch('dias_bloqueados', {
       method: 'POST',
       body: JSON.stringify({ fecha, slot_id: slot_id || 'all', motivo: motivo || '' }),
-      headers: { 'Prefer': 'resolution=merge-duplicates,return=representation' }
+      headers: { 'Prefer': 'resolution=merge-duplicates' }
     });
   }
 
-  async function deleteBlockedDayFromSupabase(fecha, slot_id = null) {
-    if (slot_id) {
-      await sbFetch(`dias_bloqueados?fecha=eq.${fecha}&slot_id=eq.${slot_id}`, { method: 'DELETE' });
-    } else {
-      await sbFetch(`dias_bloqueados?fecha=eq.${fecha}`, { method: 'DELETE' });
-    }
+  async function deleteBlockedDayFromSupabase(fecha) {
+    await sbFetch(`dias_bloqueados?fecha=eq.${encodeURIComponent(fecha)}`, { method: 'DELETE' });
+  }
+
+  async function deleteReservaFromSupabase(rid) {
+    await sbFetch(`reservas?id=eq.${encodeURIComponent(rid)}`, { method: 'DELETE' });
   }
 
   function saveBlockedDays() { /* manejado en Supabase */ }

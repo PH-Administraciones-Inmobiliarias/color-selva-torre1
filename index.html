@@ -992,23 +992,25 @@
   const SB_KEY = 'sb_publishable_Y24Dy1lei6_-UXwYEToumQ_pjrRQEKJ';
 
   async function sbFetch(path, options = {}) {
+    const extraHeaders = options.headers || {};
+    const prefer = extraHeaders['Prefer'] || 'return=minimal';
     const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
       ...options,
       headers: {
         'apikey': SB_KEY,
         'Authorization': `Bearer ${SB_KEY}`,
         'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
-        ...(options.headers || {})
+        'Prefer': prefer,
+        ...Object.fromEntries(Object.entries(extraHeaders).filter(([k]) => k !== 'Prefer'))
       }
     });
     if (!res.ok && res.status !== 204) {
       const err = await res.text();
-      console.error('Supabase error:', err);
+      console.error('Supabase error:', path, err);
       return null;
     }
     if (res.status === 204) return null;
-    return res.json();
+    try { return await res.json(); } catch { return null; }
   }
 
   // ── DATA (Supabase) ───────────────────────────────────
@@ -1491,32 +1493,28 @@
     document.getElementById('modalBlockedDays').classList.remove('open');
   }
 
-  // Toggle button click handlers
-  document.getElementById('blockAll').addEventListener('click', function() {
-    const isActive = this.classList.toggle('active');
-    this.querySelector('.block-toggle-icon').textContent = isActive ? '✓' : '○';
-    // Toggle all slot buttons
-    document.querySelectorAll('.block-slot-cb').forEach(btn => {
-      if (isActive) {
-        btn.classList.add('active');
-        btn.querySelector('.block-toggle-icon').textContent = '✓';
-      } else {
-        btn.classList.remove('active');
-        btn.querySelector('.block-toggle-icon').textContent = '○';
-      }
-    });
-  });
+  // Use event delegation on the container so it always works
+  document.getElementById('blockSlotsContainer').addEventListener('click', function(e) {
+    const btn = e.target.closest('.block-toggle-btn');
+    if (!btn) return;
+    const isAll = btn.id === 'blockAll';
 
-  document.querySelectorAll('.block-slot-cb').forEach(btn => {
-    btn.addEventListener('click', function() {
-      const isActive = this.classList.toggle('active');
-      this.querySelector('.block-toggle-icon').textContent = isActive ? '✓' : '○';
-      // If not all active, deactivate "Día completo"
+    if (isAll) {
+      const nowActive = !btn.classList.contains('active');
+      btn.classList.toggle('active', nowActive);
+      btn.querySelector('.block-toggle-icon').textContent = nowActive ? '✓' : '○';
+      document.querySelectorAll('.block-slot-cb').forEach(b => {
+        b.classList.toggle('active', nowActive);
+        b.querySelector('.block-toggle-icon').textContent = nowActive ? '✓' : '○';
+      });
+    } else {
+      btn.classList.toggle('active');
+      btn.querySelector('.block-toggle-icon').textContent = btn.classList.contains('active') ? '✓' : '○';
       const allActive = [...document.querySelectorAll('.block-slot-cb')].every(b => b.classList.contains('active'));
       const allBtn = document.getElementById('blockAll');
       allBtn.classList.toggle('active', allActive);
       allBtn.querySelector('.block-toggle-icon').textContent = allActive ? '✓' : '○';
-    });
+    }
   });
 
   function renderBlockedDaysList() {

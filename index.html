@@ -846,39 +846,28 @@
       </div>
     </div>
 
-    <!-- PASO 2: Verificar correo para recuperar -->
+
+    <!-- PASO 2: Recuperar contraseña vía Supabase Auth -->
     <div id="adminStep2" style="display:none;">
-      <p style="font-size:.82rem;color:#c0d8da;margin-bottom:16px;line-height:1.5;">Ingresa tu correo autorizado para verificarlo y crear una nueva contraseña.</p>
+      <p style="font-size:.82rem;color:#c0d8da;margin-bottom:16px;line-height:1.5;">
+        Ingresa tu correo de administrador y te enviaremos un enlace para restablecer tu contraseña.
+      </p>
       <div class="modal-field">
         <label>Correo autorizado</label>
-        <input type="email" id="recoverEmail" placeholder="admin@phcolombia.com" />
+        <input type="email" id="recoverEmail" placeholder="administrador3@admonph.com" />
       </div>
-      <div class="modal-error" id="recoverEmailError">Este correo no está registrado como administrador.</div>
+      <div class="modal-error" id="recoverEmailError">Ocurrió un error. Verifica el correo e intenta de nuevo.</div>
+      <div id="recoverSuccess" style="display:none;background:rgba(79,168,168,.1);border:1px solid rgba(79,168,168,.25);border-radius:10px;padding:12px 14px;margin-top:12px;">
+        <p style="font-size:.78rem;color:var(--teal-light);margin:0;">✓ Correo enviado. Revisa tu bandeja de entrada y sigue el enlace para crear una nueva contraseña.</p>
+      </div>
       <div class="modal-actions" style="margin-top:16px;">
-        <button class="btn-modal-primary" id="btnVerifyEmail">Verificar correo</button>
+        <button class="btn-modal-primary" id="btnVerifyEmail">Enviar enlace</button>
         <button class="btn-modal-cancel" id="btnBackToLogin">← Volver</button>
       </div>
     </div>
 
-    <!-- PASO 3: Nueva contraseña -->
-    <div id="adminStep3" style="display:none;">
-      <div style="background:rgba(79,168,168,.1);border:1px solid rgba(79,168,168,.25);border-radius:10px;padding:12px 14px;margin-bottom:16px;">
-        <p style="font-size:.78rem;color:var(--teal-light);margin:0;">✓ Correo verificado. Crea tu nueva contraseña.</p>
-      </div>
-      <div class="modal-field">
-        <label>Nueva contraseña</label>
-        <input type="password" id="newPass1" placeholder="Mínimo 6 caracteres" />
-      </div>
-      <div class="modal-field" style="margin-top:10px;">
-        <label>Confirmar nueva contraseña</label>
-        <input type="password" id="newPass2" placeholder="Repite la contraseña" />
-      </div>
-      <div class="modal-error" id="newPassError">Las contraseñas no coinciden o son muy cortas.</div>
-      <div class="modal-actions" style="margin-top:16px;">
-        <button class="btn-modal-primary" id="btnSaveNewPass">Guardar contraseña</button>
-        <button class="btn-modal-cancel" id="btnCancelRecover">Cancelar</button>
-      </div>
-    </div>
+    <!-- PASO 3: ya no necesario con Supabase Auth -->
+    <div id="adminStep3" style="display:none;"></div>
 
     <!-- PASO 4: legacy logout buttons -->
     <div id="adminStep4" style="display:none;">
@@ -1875,13 +1864,8 @@
     if (e.target === document.getElementById('modalReschedule')) closeRescheduleModal();
   });
 
-  // ── ADMIN MODAL ───────────────────────────────────────
+  // ── ADMIN MODAL (Supabase Auth) ───────────────────────
   const ADMIN_EMAIL = 'administrador3@admonph.com';
-  const ADMIN_PASS  = 'colorselva2026';
-
-  function getAdminEmail() { return ADMIN_EMAIL; }
-  // Password can be updated via recovery flow and stored in localStorage
-  function getAdminPass()  { return localStorage.getItem('csAdminPass') || ADMIN_PASS; }
 
   function showAdminStep(n) {
     [1,2,3,4].forEach(i => {
@@ -1915,20 +1899,44 @@
       : '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
   });
 
-  function tryAdminLogin() {
+  // ── LOGIN con Supabase Auth ───────────────────────────
+  async function tryAdminLogin() {
     const email = document.getElementById('adminEmail').value.trim().toLowerCase();
     const pass  = document.getElementById('adminPass').value;
     const errEl = document.getElementById('adminLoginError');
-    if (email === getAdminEmail().toLowerCase() && pass === getAdminPass()) {
-      adminLoggedIn = true;
-      adminDate = new Date(); adminDate.setHours(0,0,0,0);
-      updateAdminBadge();
-      closeAdminModal();
-      renderAll();
-    } else {
+    const btn   = document.getElementById('btnAdminLogin');
+
+    errEl.classList.remove('visible');
+    btn.disabled = true;
+    btn.textContent = 'Verificando...';
+
+    try {
+      const res = await fetch(`${SB_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: {
+          'apikey': SB_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password: pass })
+      });
+      const json = await res.json();
+
+      if (res.ok && json.access_token) {
+        adminLoggedIn = true;
+        adminDate = new Date(); adminDate.setHours(0,0,0,0);
+        updateAdminBadge();
+        closeAdminModal();
+        renderAll();
+      } else {
+        errEl.classList.add('visible');
+        document.getElementById('adminPass').value = '';
+      }
+    } catch(e) {
       errEl.classList.add('visible');
-      document.getElementById('adminPass').value = '';
     }
+
+    btn.disabled = false;
+    btn.textContent = 'Ingresar';
   }
 
   function doLogout() {
@@ -1938,10 +1946,11 @@
     toast('Sesión de administrador cerrada.');
   }
 
-  // ── FORGOT PASSWORD FLOW ──────────────────────────────
+  // ── RECUPERAR CONTRASEÑA vía Supabase Auth ────────────
   document.getElementById('btnForgotPass').addEventListener('click', () => {
-    document.getElementById('recoverEmail').value = '';
+    document.getElementById('recoverEmail').value = ADMIN_EMAIL;
     document.getElementById('recoverEmailError').classList.remove('visible');
+    document.getElementById('recoverSuccess').style.display = 'none';
     showAdminStep(2);
   });
 
@@ -1949,35 +1958,37 @@
     showAdminStep(1);
   });
 
-  document.getElementById('btnVerifyEmail').addEventListener('click', () => {
+  document.getElementById('btnVerifyEmail').addEventListener('click', async () => {
     const email = document.getElementById('recoverEmail').value.trim().toLowerCase();
     const errEl = document.getElementById('recoverEmailError');
-    if (email === getAdminEmail().toLowerCase()) {
-      errEl.classList.remove('visible');
-      document.getElementById('newPass1').value = '';
-      document.getElementById('newPass2').value = '';
-      document.getElementById('newPassError').classList.remove('visible');
-      showAdminStep(3);
-    } else {
+    const btn   = document.getElementById('btnVerifyEmail');
+
+    errEl.classList.remove('visible');
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+
+    try {
+      const res = await fetch(`${SB_URL}/auth/v1/recover`, {
+        method: 'POST',
+        headers: {
+          'apikey': SB_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email })
+      });
+
+      if (res.ok || res.status === 200) {
+        document.getElementById('recoverSuccess').style.display = '';
+        btn.style.display = 'none';
+      } else {
+        errEl.classList.add('visible');
+      }
+    } catch(e) {
       errEl.classList.add('visible');
     }
-  });
 
-  document.getElementById('btnSaveNewPass').addEventListener('click', () => {
-    const p1 = document.getElementById('newPass1').value;
-    const p2 = document.getElementById('newPass2').value;
-    const errEl = document.getElementById('newPassError');
-    if (p1.length < 6 || p1 !== p2) {
-      errEl.classList.add('visible');
-      return;
-    }
-    localStorage.setItem('csAdminPass', p1);
-    closeAdminModal();
-    toast('✓ Contraseña actualizada. Ya puedes iniciar sesión.');
-  });
-
-  document.getElementById('btnCancelRecover').addEventListener('click', () => {
-    showAdminStep(1);
+    btn.disabled = false;
+    btn.textContent = 'Enviar enlace';
   });
 
   document.getElementById('btnAdminPanel').addEventListener('click', openAdminModal);

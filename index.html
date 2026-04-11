@@ -776,7 +776,7 @@
     <div id="adminStep1">
       <div class="modal-field">
         <label>Correo autorizado</label>
-        <input type="email" id="adminEmail" placeholder="admin@phcolombia.com" autocomplete="username" />
+        <input type="email" id="adminEmail" placeholder="ejemplo@ejemplo.com" autocomplete="username" />
       </div>
       <div class="modal-field" style="margin-top:10px;">
         <label>Contraseña</label>
@@ -945,13 +945,87 @@
   function isSunday(date) { return date.getDay() === 0; }
   function isSaturday(date) { return date.getDay() === 6; }
 
-  // ── ADMIN BLOCKED DAYS ────────────────────────────────
-  // Stored as { [dateKey]: reason } in localStorage
-  function loadBlockedDays() {
-    try { return JSON.parse(localStorage.getItem('csBlockedDays') || '{}'); } catch { return {}; }
+  // ── SUPABASE CONFIG ───────────────────────────────────
+  const SB_URL = 'https://epcuddrytxzgkxmbhwng.supabase.co';
+  const SB_KEY = 'sb_publishable_Y24Dy1lei6_-UXwYEToumQ_pjrRQEKJ';
+
+  async function sbFetch(path, options = {}) {
+    const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
+      ...options,
+      headers: {
+        'apikey': SB_KEY,
+        'Authorization': `Bearer ${SB_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+        ...(options.headers || {})
+      }
+    });
+    if (!res.ok && res.status !== 204) {
+      const err = await res.text();
+      console.error('Supabase error:', err);
+      return null;
+    }
+    if (res.status === 204) return null;
+    return res.json();
   }
-  function saveBlockedDays(bd) { localStorage.setItem('csBlockedDays', JSON.stringify(bd)); }
-  let blockedDays = loadBlockedDays();
+
+  // ── DATA (Supabase) ───────────────────────────────────
+  let data = {}; // { 'YYYY-MM-DD': [ ...reservas ] }
+
+  async function loadDataFromSupabase() {
+    const rows = await sbFetch('reservas?select=*');
+    data = {};
+    if (rows) {
+      rows.forEach(r => {
+        if (!data[r.fecha]) data[r.fecha] = [];
+        data[r.fecha].push({
+          id: r.id, name: r.nombre, apt: r.apartamento,
+          motivo: r.motivo, slotId: r.slot_id, registrado: r.registrado
+        });
+      });
+    }
+  }
+
+  async function saveReservaToSupabase(dateKey, res) {
+    await sbFetch('reservas', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: res.id, fecha: dateKey, slot_id: res.slotId,
+        slot_label: ALL_SLOTS.find(s => s.id === res.slotId)?.label || res.slotId,
+        nombre: res.name, apartamento: res.apt,
+        motivo: res.motivo, registrado: res.registrado
+      })
+    });
+  }
+
+  async function deleteReservaFromSupabase(rid) {
+    await sbFetch(`reservas?id=eq.${rid}`, { method: 'DELETE' });
+  }
+
+  function saveData() { /* datos manejados en Supabase */ }
+
+  // ── ADMIN BLOCKED DAYS (Supabase) ─────────────────────
+  let blockedDays = {};
+
+  async function loadBlockedDaysFromSupabase() {
+    const rows = await sbFetch('dias_bloqueados?select=*');
+    blockedDays = {};
+    if (rows) rows.forEach(r => { blockedDays[r.fecha] = r.motivo || ''; });
+  }
+
+  async function saveBlockedDayToSupabase(fecha, motivo) {
+    await sbFetch('dias_bloqueados', {
+      method: 'POST',
+      body: JSON.stringify({ fecha, motivo: motivo || '' }),
+      headers: { 'Prefer': 'resolution=merge-duplicates,return=representation' }
+    });
+  }
+
+  async function deleteBlockedDayFromSupabase(fecha) {
+    await sbFetch(`dias_bloqueados?fecha=eq.${fecha}`, { method: 'DELETE' });
+  }
+
+  function saveBlockedDays() { /* manejado en Supabase */ }
 
   function isDayBlocked(date) {
     return isSunday(date) || isHoliday(date) || (toKey(date) in blockedDays);
@@ -986,12 +1060,6 @@
     return slots;
   }
 
-  // ── DATA ──────────────────────────────────────────────
-  function loadData() { try { return JSON.parse(localStorage.getItem('csReservations') || '{}'); } catch { return {}; } }
-  function saveData(d) { localStorage.setItem('csReservations', JSON.stringify(d)); }
-
-  let data = loadData();
-
   // Start on today; if today is blocked, advance to next available
   let selectedDate = new Date(); selectedDate.setHours(0,0,0,0);
   function advanceToNextAvailable(d) {
@@ -999,7 +1067,6 @@
     while (isDayBlocked(d) && d < cap) d.setDate(d.getDate() + 1);
     return d;
   }
-  advanceToNextAvailable(selectedDate);
 
   let selectedSlot = null;
 
@@ -1378,9 +1445,9 @@
       list.appendChild(el);
     });
     list.querySelectorAll('.btn-unblock').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         delete blockedDays[btn.dataset.key];
-        saveBlockedDays(blockedDays);
+        await deleteBlockedDayFromSupabase(btn.dataset.key);
         renderBlockedDaysList();
         renderAll();
         toast('✓ Día desbloqueado correctamente.');
@@ -1388,7 +1455,7 @@
     });
   }
 
-  function addBlockedDay() {
+  async function addBlockedDay() {
     const dateVal   = document.getElementById('blockDateInput').value;
     const reason    = document.getElementById('blockReasonInput').value.trim();
     const errEl     = document.getElementById('blockError');
@@ -1421,7 +1488,7 @@
 
     errEl.classList.remove('visible');
     blockedDays[dateVal] = reason;
-    saveBlockedDays(blockedDays);
+    await saveBlockedDayToSupabase(dateVal, reason);
     renderBlockedDaysList();
     renderAll();
     renderCalendar();
@@ -1502,16 +1569,15 @@
     });
 
     list.querySelectorAll('.btn-cancel-this').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const rid = btn.dataset.rid;
         const dk  = btn.dataset.datekey;
         if (!data[dk]) return;
         data[dk] = data[dk].filter(r => r.id !== rid);
-        saveData(data);
+        await deleteReservaFromSupabase(rid);
         renderAll();
         closeCancelModal();
         toast('✓ Reserva cancelada correctamente.');
-        sheetsPost({ action: 'delete', id: rid });
       });
     });
 
@@ -1663,7 +1729,7 @@
     });
   }
 
-  function confirmReschedule() {
+  async function confirmReschedule() {
     if (!rsDate) { toast('Selecciona una nueva fecha.', true); return; }
     if (!rsSlot) { document.getElementById('rsSlotError').classList.add('visible'); return; }
 
@@ -1683,19 +1749,13 @@
     delete updated.dateKey; delete updated.slotLabel;
     data[newKey].push(updated);
 
-    saveData(data);
     renderAll();
     if (adminLoggedIn) renderAdminPanel();
     closeRescheduleModal();
 
-    // Sheets sync
-    sheetsPost({ action: 'delete', id: rsRes.id });
-    sheetsPost({
-      action: 'add', id: updated.id,
-      date: rsDate.toLocaleDateString('es-CO', { weekday:'long', day:'numeric', month:'long', year:'numeric' }),
-      slotLabel: slot ? slot.label : rsSlot,
-      name: updated.name, apt: updated.apt, motivo: updated.motivo, registrado: now
-    });
+    // Supabase sync
+    await deleteReservaFromSupabase(rsRes.id);
+    await saveReservaToSupabase(newKey, updated);
 
     toast(`✓ Reserva modificada al ${newKey} — ${slot ? slot.label : rsSlot}`);
   }
@@ -1717,7 +1777,7 @@
   const ADMIN_EMAIL_KEY = 'csAdminEmail';
   const ADMIN_PASS_KEY  = 'csAdminPass';
   // Default credentials — stored on first run if not already set
-  const DEFAULT_ADMIN_EMAIL = 'admin@phcolombia.com';  // ← cambia este correo
+  const DEFAULT_ADMIN_EMAIL = 'administrador3@admonph.com';  // ← cambia este correo
   const DEFAULT_ADMIN_PASS  = 'colorselva2026';         // ← cambia esta contraseña
 
   function getAdminEmail() { return localStorage.getItem(ADMIN_EMAIL_KEY) || DEFAULT_ADMIN_EMAIL; }
@@ -1876,7 +1936,6 @@
 
   // ── ACTIONS ───────────────────────────────────────────
   async function deleteRes(rid) {
-    // Search across ALL dates to find and remove the reservation
     let found = false;
     Object.keys(data).forEach(key => {
       if (data[key].some(r => r.id === rid)) {
@@ -1885,11 +1944,9 @@
       }
     });
     if (!found) return;
-    saveData(data);
+    await deleteReservaFromSupabase(rid);
     renderAll();
     if (adminLoggedIn) renderAdminPanel();
-    // Sincroniza eliminación con Sheets
-    await sheetsPost({ action: 'delete', id: rid });
   }
 
   async function submitForm() {
@@ -1942,7 +1999,7 @@
     const newRes = { id: uid(), name, apt, motivo, slotId: selectedSlot, registrado: now };
 
     data[key].push(newRes);
-    saveData(data);
+    await saveReservaToSupabase(key, newRes);
 
     document.getElementById('fName').value  = '';
     document.getElementById('fApt').value   = '';
@@ -1951,18 +2008,6 @@
 
     renderAll();
     toast('✓ Reserva confirmada para ' + name + '.');
-
-    // Envía a Google Sheets
-    await sheetsPost({
-      action:    'add',
-      id:        newRes.id,
-      date:      fmtDateLabel(selectedDate),
-      slotLabel: slot ? slot.label : newRes.slotId,
-      name:      newRes.name,
-      apt:       newRes.apt,
-      motivo:    newRes.motivo,
-      registrado: now
-    });
   }
 
   // ── CALENDAR POPUP ────────────────────────────────────
@@ -2078,12 +2123,34 @@
 
   document.getElementById('btnSubmit').addEventListener('click', submitForm);
 
-  // ── INIT ──────────────────────────────────────────────
-  renderAll();
-  updateAdminBadge();
+  // ── INIT (carga desde Supabase) ───────────────────────
+  async function init() {
+    // Muestra estado de carga
+    document.getElementById('btnSubmit').disabled = true;
+    document.getElementById('btnSubmit').textContent = 'Cargando...';
 
-  // Auto-refresh every minute to disable past slots in real time
-  setInterval(() => { renderSlots(); renderStats(); }, 60000);
+    await Promise.all([
+      loadDataFromSupabase(),
+      loadBlockedDaysFromSupabase()
+    ]);
+
+    advanceToNextAvailable(selectedDate);
+    renderAll();
+    updateAdminBadge();
+
+    document.getElementById('btnSubmit').disabled = false;
+    document.getElementById('btnSubmit').textContent = 'Confirmar Reserva';
+  }
+
+  init();
+
+  // Auto-refresh cada 60 segundos para sincronizar con Supabase
+  setInterval(async () => {
+    await loadDataFromSupabase();
+    renderSlots();
+    renderStats();
+    if (adminLoggedIn) renderAdminPanel();
+  }, 60000);
 })();
 </script>
 

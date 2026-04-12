@@ -1873,6 +1873,10 @@
     await deleteReservaFromSupabase(rsRes.id);
     await saveReservaToSupabase(newKey, updated);
 
+    // Sheets sync — borra de la fecha/franja anterior, agrega en la nueva
+    await sheetsPost({ action: 'delete', date: oldKey, slotId: rsRes.slotId, apt: rsRes.apt });
+    await sheetsPost({ action: 'upsert', date: newKey, slotId: rsSlot, apt: updated.apt });
+
     toast(`✓ Reserva modificada al ${newKey} — ${slot ? slot.label : rsSlot}`);
   }
 
@@ -2029,7 +2033,7 @@
 
   // ── GOOGLE SHEETS INTEGRATION ─────────────────────────
   // ⚠ Reemplaza esta URL con la que te genera Apps Script al implementar
-  const SHEETS_URL = 'PEGA_AQUI_LA_URL_DE_TU_APPS_SCRIPT';
+  const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyF4h12d-8W1iW_3ag4DMJ8_8IAB3rE0eySEEuHSD0WJcbYgZIdKOFC8V1yvOmt7swUPA/exec';
 
   function fmtDateLabel(d) {
     return d.toLocaleDateString('es-CO', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
@@ -2071,15 +2075,14 @@
 
   // ── ACTIONS ───────────────────────────────────────────
   async function deleteRes(rid) {
-    let found = false;
+    let found = null;
     Object.keys(data).forEach(key => {
-      if (data[key].some(r => r.id === rid)) {
-        data[key] = data[key].filter(r => r.id !== rid);
-        found = true;
-      }
+      const r = data[key].find(r => r.id === rid);
+      if (r) { found = { key, res: r }; data[key] = data[key].filter(r => r.id !== rid); }
     });
     if (!found) return;
     await deleteReservaFromSupabase(rid);
+    await sheetsPost({ action: 'delete', date: found.key, slotId: found.res.slotId, apt: found.res.apt });
     renderAll();
     if (adminLoggedIn) renderAdminPanel();
   }
@@ -2135,6 +2138,7 @@
 
     data[key].push(newRes);
     await saveReservaToSupabase(key, newRes);
+    await sheetsPost({ action: 'upsert', date: key, slotId: selectedSlot, apt: newRes.apt });
 
     document.getElementById('fName').value  = '';
     document.getElementById('fApt').value   = '';

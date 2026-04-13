@@ -1689,8 +1689,10 @@
         const rid = btn.dataset.rid;
         const dk  = btn.dataset.datekey;
         if (!data[dk]) return;
+        const res = data[dk].find(r => r.id === rid);
         data[dk] = data[dk].filter(r => r.id !== rid);
         await deleteReservaFromSupabase(rid);
+        if (res) sheetsPost({ action: 'delete', date: dk, slotId: res.slotId, apt: res.apt });
         renderAll();
         closeCancelModal();
         toast('✓ Reserva cancelada correctamente.');
@@ -1875,7 +1877,7 @@
 
     // Sheets sync — borra de la fecha/franja anterior, agrega en la nueva
     sheetsPost({ action: 'delete', date: oldKey, slotId: rsRes.slotId, apt: rsRes.apt });
-    sheetsPost({ action: 'upsert', date: newKey, slotId: rsSlot, apt: updated.apt });
+    sheetsPost({ action: 'upsert', date: newKey, slotId: rsSlot, apt: updated.apt, motivo: updated.motivo });
 
     toast(`✓ Reserva modificada al ${newKey} — ${slot ? slot.label : rsSlot}`);
   }
@@ -2137,7 +2139,7 @@
 
     data[key].push(newRes);
     await saveReservaToSupabase(key, newRes);
-    sheetsPost({ action: 'upsert', date: key, slotId: selectedSlot, apt: newRes.apt });
+    sheetsPost({ action: 'upsert', date: key, slotId: selectedSlot, apt: newRes.apt, motivo: newRes.motivo });
 
     document.getElementById('fName').value  = '';
     document.getElementById('fApt').value   = '';

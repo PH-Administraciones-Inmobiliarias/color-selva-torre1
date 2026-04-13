@@ -1102,6 +1102,10 @@
 
   function isDayBlocked(date) {
     if (isSunday(date) || isHoliday(date)) return true;
+    // Ventana automática: solo se permite reservar dentro de los próximos 14 días
+    const today = new Date(); today.setHours(0,0,0,0);
+    const maxDate = new Date(today); maxDate.setDate(today.getDate() + 14);
+    if (date > maxDate) return true;
     const key = toKey(date);
     return key in blockedDays && blockedDays[key].slots === 'all';
   }
@@ -2089,7 +2093,16 @@
   }
 
   async function submitForm() {
-    if (isDayBlocked(selectedDate)) { toast('No se pueden hacer reservas en domingos ni festivos.', true); return; }
+    if (isDayBlocked(selectedDate)) {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const maxDate = new Date(today); maxDate.setDate(today.getDate() + 14);
+      if (selectedDate > maxDate) {
+        toast('Solo puedes reservar dentro de los próximos 14 días.', true);
+      } else {
+        toast('No se pueden hacer reservas en domingos ni festivos.', true);
+      }
+      return;
+    }
 
     const name   = document.getElementById('fName').value.trim();
     const apt    = document.getElementById('fApt').value.trim();

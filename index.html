@@ -1874,8 +1874,8 @@
     await saveReservaToSupabase(newKey, updated);
 
     // Sheets sync — borra de la fecha/franja anterior, agrega en la nueva
-    await sheetsPost({ action: 'delete', date: oldKey, slotId: rsRes.slotId, apt: rsRes.apt });
-    await sheetsPost({ action: 'upsert', date: newKey, slotId: rsSlot, apt: updated.apt });
+    sheetsPost({ action: 'delete', date: oldKey, slotId: rsRes.slotId, apt: rsRes.apt });
+    sheetsPost({ action: 'upsert', date: newKey, slotId: rsSlot, apt: updated.apt });
 
     toast(`✓ Reserva modificada al ${newKey} — ${slot ? slot.label : rsSlot}`);
   }
@@ -2040,9 +2040,8 @@
   }
 
   async function sheetsPost(payload) {
-    if (!SHEETS_URL || SHEETS_URL.includes('PEGA_AQUI')) return; // no configurado aún
     try {
-      await fetch(SHEETS_URL, {
+      fetch(SHEETS_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
@@ -2082,7 +2081,7 @@
     });
     if (!found) return;
     await deleteReservaFromSupabase(rid);
-    await sheetsPost({ action: 'delete', date: found.key, slotId: found.res.slotId, apt: found.res.apt });
+    sheetsPost({ action: 'delete', date: found.key, slotId: found.res.slotId, apt: found.res.apt });
     renderAll();
     if (adminLoggedIn) renderAdminPanel();
   }
@@ -2138,7 +2137,7 @@
 
     data[key].push(newRes);
     await saveReservaToSupabase(key, newRes);
-    await sheetsPost({ action: 'upsert', date: key, slotId: selectedSlot, apt: newRes.apt });
+    sheetsPost({ action: 'upsert', date: key, slotId: selectedSlot, apt: newRes.apt });
 
     document.getElementById('fName').value  = '';
     document.getElementById('fApt').value   = '';
